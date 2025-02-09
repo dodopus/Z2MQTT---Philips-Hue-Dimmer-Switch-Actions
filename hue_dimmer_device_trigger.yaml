@@ -21,13 +21,13 @@ blueprint:
       selector:
         entity:
           domain: event
-          multiple: false
+          multiple: true
     light:
       name: Target light
       selector:
         entity:
           domain: light
-          multiple: false
+          multiple: true
     step:
       name: Dimming step in percent
       default: 25
