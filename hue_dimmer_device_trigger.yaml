@@ -1,0 +1,130 @@
+blueprint:
+  name: Z2MQTT - Philips Hue Dimmer Switch Actions
+  description: 'Control lights with a Philips Hue Dimmer Switch using events.
+
+    The top "on" button will turn the lights on to the last set
+    brightness.
+
+    Dim up/down buttons will change the brightness using predefined
+    step and can be pressed and hold until the brightness is
+    satisfactory.
+
+    The bottom "off" button will turn the lights off.
+
+    Long Off press sets to minimum brightness, long On press sets to maximum brightness (if enabled).
+    '
+  domain: automation
+  input:
+    dimmer:
+      name: Philips Hue dimmer action
+      description: 'Select the action entity for your Hue dimmer'
+      selector:
+        entity:
+          domain: event
+          multiple: false
+    light:
+      name: Target light
+      selector:
+        entity:
+          domain: light
+          multiple: false
+    step:
+      name: Dimming step in percent
+      default: 25
+      selector:
+        number:
+          min: 0.0
+          max: 50.0
+          mode: slider
+          step: 1.0
+          unit_of_measurement: "%"
+    transition:
+      name: Transition speed
+      description: 'How fast the brightness changes (in seconds)'
+      default: 0.5
+      selector:
+        number:
+          min: 0.0
+          max: 2.0
+          mode: slider
+          step: 0.1
+          unit_of_measurement: "s"
+    lowest_brightness:
+      name: Lowest brightness level
+      description: 'Set this brightness level on long "Off" button press'
+      default: 3
+      selector:
+        number:
+          min: 1.0
+          max: 50.0
+          mode: slider
+          step: 1.0
+          unit_of_measurement: "%"
+    highest_brightness:
+      name: Highest brightness level
+      description: 'Set this brightness level on long "On" button press'
+      default: 100
+      selector:
+        number:
+          min: 50.0
+          max: 100.0
+          mode: slider
+          step: 1.0
+          unit_of_measurement: "%"
+    enable_max_brightness:
+      name: Enable max brightness on long press
+      description: 'When enabled, holding the ON button will set brightness to maximum'
+      default: true
+      selector:
+        boolean:
+
+trigger:
+  platform: state
+  entity_id: !input dimmer
+
+action:
+  - variables:
+      event_type: "{{ trigger.to_state.attributes.event_type }}"
+      button: "{{ trigger.to_state.attributes.button }}"
+      step: !input step
+      negative_step: "{{ -1 * (step | int) }}"
+      max_brightness_enabled: "{{ enable_max_brightness | default(true) }}"
+  - choose:
+    - conditions: "{{ event_type == 'press_release' and button == 'on' }}"
+      sequence:
+        - service: light.turn_on
+          data:
+            entity_id: !input light
+    - conditions: "{{ event_type == 'press_release' and button == 'off' }}"
+      sequence:
+        - service: light.turn_off
+          data:
+            entity_id: !input light
+    - conditions: "{{ button == 'down' and (event_type == 'press_release' or event_type == 'hold' or event_type == 'hold_release') }}"
+      sequence:
+        - service: light.turn_on
+          data:
+            entity_id: !input light
+            brightness_step_pct: "{{ negative_step }}"
+            transition: !input transition
+    - conditions: "{{ button == 'up' and (event_type == 'press_release' or event_type == 'hold' or event_type == 'hold_release') }}"
+      sequence:
+        - service: light.turn_on
+          data:
+            entity_id: !input light
+            brightness_step_pct: "{{ step }}"
+            transition: !input transition
+    - conditions: "{{ max_brightness_enabled and button == 'on' and (event_type == 'hold' or event_type == 'hold_release') }}"
+      sequence:
+        - service: light.turn_on
+          data:
+            entity_id: !input light
+            brightness_pct: !input highest_brightness
+            transition: !input transition
+    - conditions: "{{ button == 'off' and (event_type == 'hold' or event_type == 'hold_release') }}"
+      sequence:
+        - service: light.turn_on
+          data:
+            entity_id: !input light
+            brightness_pct: !input lowest_brightness
+            transition: !input transition
